@@ -189,25 +189,116 @@ dat$name[1:5]
 
 # separate on underscores
 dat %>% separate(name, c("year", "name"), sep = "_")
-head(dat)
+
+# the separator "_" is the default separater, so we can omit this argument
+
+
 
 # separate on underscores (the default), convert years to numeric
 dat %>% separate(name, c("year", "name"), convert = TRUE)
-head(dat)
+
+# because the "life_expectancy" variable has also an underscore "_", it will be drop out. This is a new issue. To solve it, we added a third column for expectancy.
+# But there is again a new issue: for fertility, the third column has only NA values
+
 
 # split on all underscores, pad empty cells with NA
 dat %>% separate(name, c("year", "name_1", "name_2"), 
                  fill = "right", convert = TRUE)
-head(dat)
+
+# Another way to solve this, is to separate the first underscore, but keep the second merged.
 
 # split on first underscore but keep life_expectancy merged
 dat %>% separate(name, c("year", "name"), sep = "_", 
                  extra = "merge", convert = TRUE)
-head(dat)
+
+# Now we create two variables from the variable "name" using the pivot_wider ()
 
 # separate then create a new column for each variable using pivot_wider
 dat %>% separate(name, c("year", "name"), sep = "_", 
                  extra = "merge", convert = TRUE) %>%
   pivot_wider()
 
+
+# Unite
+
+# using the data from the previous video
+# if we had used this non-optimal approach to separate
+dat %>% 
+  separate(name, c("year", "name_1", "name_2"), 
+           fill = "right", convert = TRUE)
+
+# we could unite the second and third columns using unite()
+dat %>% 
+  separate(name, c("year", "name_1", "name_2"), 
+           fill = "right", convert = TRUE) %>%
+  unite(variable_name, name_1, name_2, sep="_")
+
+# spread the columns
+dat %>% 
+  separate(name, c("year", "name_1", "name_2"), 
+           fill = "right", convert = TRUE) %>%
+  unite(name, name_1, name_2, sep="_") %>%
+  spread(name, value) %>%
+  rename(fertlity = fertility_NA)
+
+# Assessment Part 1: Reshaping Data (ok well done)
+
+# Assessment Part 2: Reshaping Data
+
+# Question 11: Examine the built-in dataset co2. This dataset comes with base R, not dslabs - just type co2 to access the dataset.
+
+co2  # no tidy: Month variable is the header
+
+# Question 12: Run the following code to define the co2_wide object:
+
+co2_wide <- data.frame(matrix(co2, ncol = 12, byrow = TRUE)) %>% 
+  setNames(1:12) %>%
+  mutate(year = as.character(1959:1997))
+
+head(co2_wide)  # the previous command did not change the data very much, only change the name of the months. The dataset were saved as a data.frame (39 obs of 13 variables)
+
+co2_tidy <- co2_wide %>%
+  pivot_longer(-year, names_to = "month", values_to = "co2")
+
+head(co2_tidy)
+
+# Question 13: Use co2_tidy to plot CO2 versus month with a different curve for each year:
+
+co2_tidy %>% 
+  ggplot(aes(as.numeric(month), co2, color = year)) + 
+  geom_line()
+
+# Question 14: Load the admissions dataset from dslabs, which contains college admission information for men and women across six majors, and remove the applicants percentage column:
+
+library(dslabs)
+data(admissions)
+dat <- admissions %>% 
+  select(-applicants)
+
 head(dat)
+
+dat_tidy <- pivot_wider(dat, names_from = gender, values_from = admitted)
+
+head(dat_tidy)
+
+# Question 15: Now use the admissions dataset to create the object tmp, which has columns major, gender, key and value:
+
+tmp <- admissions %>%
+  pivot_longer(cols = c(admitted, applicants), names_to = "key", values_to = "value")
+tmp
+
+# Combine the key and gender and create a new column called column_name to get a variable with the following values: 
+# admitted_men, admitted_women, applicants_men, and applicants_women. Save the new data as tmp2.
+
+tmp2 <- tmp %>%
+  unite(column_name, key, gender)
+
+tmp2
+
+# Question 16: Which function can reshape tmp2 to a table with six rows and five columns named major, 
+# admitted_men, admitted_women, applicants_men, and applicants_women?
+
+### End of Assessment Part 2 (well done - easy easy)
+
+
+# Section 2: Tidy Data 2.2: Combining Tables
