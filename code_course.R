@@ -339,7 +339,6 @@ tab %>% ggplot(aes(population/10^6, electoral_votes, label = abb)) +
 tab1 <- slice(murders, 1:6) %>% 
   select(state, population)
 
-tab1
 
 tab2 <- slice(results_us_election_2016, c(1:3, 5, 7:8)) %>% 
   select(state, electoral_votes)
@@ -360,7 +359,8 @@ tab1 %>%
 
 inner_join(tab1, tab2) # it combines only the common elements in both tables
 
-semi_join(tab1, tab2) # it does not "paste" a table with another, this is more like a filter, it keep of tab1 only the information which is also in tab2
+semi_join(tab1, tab2) # it does not "paste" a table with another, this is more like a filter, 
+# it keep of tab1 only the information which is also in tab2
 
 anti_join(tab1, tab2) # it takes the elements not common in both tables (is the opposite of inner_join)
 
@@ -393,4 +393,101 @@ tab1 <- tab[1:2,]
 tab2 <- tab[3:4,]
 bind_rows(tab1, tab2)
 
+# Section: Set Operators
+
+# intersect vectors or data frames
+intersect(1:10, 6:15)
+intersect(c("a","b","c"), c("b","c","d"))
+tab1 <- tab[1:5,]
+tab2 <- tab[3:7,]
+intersect(tab1, tab2)
+
+# perform a union of vectors or data frames
+union(1:10, 6:15)
+union(c("a","b","c"), c("b","c","d"))
+tab1 <- tab[1:5,]
+tab2 <- tab[3:7,]
+union(tab1, tab2)
+
+# set difference of vectors or data frames
+setdiff(1:10, 6:15)
+setdiff(6:15, 1:10)
+tab1 <- tab[1:5,]
+tab2 <- tab[3:7,]
+setdiff(tab1, tab2)
+
+# setequal determines whether sets have the same elements, regardless of order
+setequal(1:5, 1:6)
+setequal(1:5, 5:1)
+setequal(tab1, tab2)
+
+# Assessment: Combining Tables
+
+install.packages("Lahman")
+library(Lahman)
+
+top <- Batting %>% 
+  filter(yearID == 2016) %>%
+  arrange(desc(HR)) %>%    # arrange by descending HR count
+  slice(1:10)    # take entries 1-10
+
+top %>% 
+  as_tibble()
+
+head(top)
+
+People %>% 
+  as_tibble()
+
+head(People)
+
+# Question 5 
+
+# Use the correct join or bind function to create a combined table of the names and statistics 
+# of the top 10 home run (HR) hitters for 2016. This table should have the player ID, first name, 
+# last name, and number of HR for the top 10 players. Name this data frame top_names.
+
+# Identify the join or bind that fills the blank in this code to create the correct table:
+
+top_names <- top %>% 
+   left_join(People) %>%
+  select(playerID, nameFirst, nameLast, HR)
+
+#  Question 6
+
+# Inspect the Salaries data frame. Filter this data frame to the 2016 salaries, then use the correct bind join function
+# to add a salary column to the top_names data frame from the previous question. 
+# Name the new data frame top_salary. Use this code framework:
+
+head(Salaries)
+
+top_salary <- Salaries %>% 
+  filter(yearID == 2016) %>%
+  right_join(top_names) %>%
+  select(nameFirst, nameLast, teamID, HR, salary)
+
+head(top_salary)
+
+
+#  Question 7
+
+# Inspect the AwardsPlayers table. Filter awards to include only the year 2016.
+
+head(AwardsPlayers)
+
+awards <- AwardsPlayers %>%
+  filter(yearID == 2016)
+
+# How many players from the top 10 home run hitters won at least one award in 2016?
+
+head(awards)
+head(top_names)
+
+length(intersect(top_names$playerID, awards$playerID))
+
+# How many players won an award in 2016 but were not one of the top 10 home run hitters in 2016?
+
+length(setdiff(awards$playerID, top_names$playerID))
+
+# Section: Web Scraping
 
