@@ -302,3 +302,95 @@ tmp2
 
 
 # Section 2: Tidy Data 2.2: Combining Tables
+# Info: join function in the dplyr packages is based on the SQL joins
+
+# import US murders data
+library(tidyverse)
+library(ggrepel)
+library(dslabs)
+
+ds_theme_set()   # what is this command?
+
+data(murders)
+head(murders)
+
+# import US election results data
+data(polls_us_election_2016)
+head(results_us_election_2016)
+
+
+# testing if the column state is equal in both tables - for join we need to have at least one similar column in both tables
+
+identical(results_us_election_2016$state, murders$state)  # FALSE: it means, the order of the column "state" is not the same in both tables. That is why we use the function join!
+
+# join the murders table and US election results table
+tab <- left_join(murders, results_us_election_2016, by = "state")
+head(tab)
+
+# plot electoral votes versus population
+tab %>% ggplot(aes(population/10^6, electoral_votes, label = abb)) +
+  geom_point() +
+  geom_text_repel() + 
+  scale_x_continuous(trans = "log2") +
+  scale_y_continuous(trans = "log2") +
+  geom_smooth(method = "lm", se = FALSE)
+
+# make two smaller tables to demonstrate joins
+tab1 <- slice(murders, 1:6) %>% 
+  select(state, population)
+
+tab1
+
+tab2 <- slice(results_us_election_2016, c(1:3, 5, 7:8)) %>% 
+  select(state, electoral_votes)
+
+tab2  # the argument "c(1:3, 5, 7:8)" of the function slice takes the location of the integer in the table
+      # for example tab2 has 6 observations, and these correspond with the location 1-2-3-5-7-8 in the main table
+
+# tab1 and tab2 are different
+
+# experiment with different joins
+left_join(tab1, tab2)
+
+tab1 %>% 
+  left_join(tab2)  # it creates NA for the variable, if the information of tab1 (main table) is not in tab2
+
+tab1 %>% 
+  right_join(tab2) # it creates NA for the variable, if the information of tab2 (main table) is not in tab1
+
+inner_join(tab1, tab2) # it combines only the common elements in both tables
+
+semi_join(tab1, tab2) # it does not "paste" a table with another, this is more like a filter, it keep of tab1 only the information which is also in tab2
+
+anti_join(tab1, tab2) # it takes the elements not common in both tables (is the opposite of inner_join)
+
+full_join(tab1, tab2) # it takes all the rows from both tables and fill in the missing parts with NAs
+
+### Binding
+
+# Unlike the join functions, the binding functions do not try to match by a variable, but rather just combine the data sets
+# bind_col() produces a tibble. If the datasets not match by the appropriate dimension we will obtain an error
+# cbind() is another function from R base (not tidyverse - dplyer) and it produces a dataframe instead a tibble (Remember: R base functions <- data.frame (not so efficient), tidyverse functions <- tibble (better than data.frame)
+# and data.table better than data.frame and tibble)
+
+bind_cols(a = 1:3, b = 4:6)
+
+# tab function creates a table
+
+tab1 <- tab[, 1:3]
+head(tab1)
+
+tab2 <- tab[, 4:6]
+head(tab2)
+
+tab3 <- tab[, 7:9]
+head(tab3)
+
+new_tab <- bind_cols(tab1, tab2, tab3)
+head(new_tab)
+
+tab1 <- tab[1:2,]
+tab2 <- tab[3:4,]
+bind_rows(tab1, tab2)
+
+
