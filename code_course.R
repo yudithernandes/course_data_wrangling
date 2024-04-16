@@ -491,3 +491,162 @@ length(setdiff(awards$playerID, top_names$playerID))
 
 # Section: Web Scraping
 
+# import a webpage into R
+library(rvest)  # rvest is part of the tidyverse and allows us to make web scraping
+
+url <- "https://en.wikipedia.org/wiki/Murder_in_the_United_States_by_state"
+
+h <- read_html(url)
+class(h)
+h
+
+tab <- h %>% 
+  html_nodes("table")
+
+tab <- tab[[3]]
+
+
+tab <- tab %>% 
+  html_table
+
+class(tab)
+
+tab <- tab %>% 
+  setNames(c("state", "population", "total", "murders", 
+                          "gun_murders", "gun_ownership", "total_rate", "murder_rate", "gun_murder_rate"))
+
+head(tab)
+
+# CSS Selectors
+
+# SelectorGadget is piece of software that allows you to interactively determine 
+# what CSS selector you need to extract specific components from the webpage. 
+
+# For the guacamole recipe page, we already have done this and determined that 
+# we need the following selectors:
+
+h <- read_html("http://www.foodnetwork.com/recipes/alton-brown/guacamole-recipe-1940609")
+
+recipe <- h %>% 
+  html_node(".o-AssetTitle__a-HeadlineText") %>% 
+  html_text()
+
+prep_time <- h %>% 
+  html_node(".m-RecipeInfo__a-Description--Total") %>% 
+  html_text()
+
+ingredients <- h %>% 
+  html_nodes(".o-Ingredients__a-Ingredient") %>% 
+  html_text()
+
+guacamole <- list(recipe, prep_time, ingredients)
+guacamole
+
+get_recipe <- function(url){
+  h <- read_html(url)
+  recipe <- h %>% html_node(".o-AssetTitle__a-HeadlineText") %>% html_text()
+  prep_time <- h %>% html_node(".m-RecipeInfo__a-Description--Total") %>% html_text()
+  ingredients <- h %>% html_nodes(".o-Ingredients__a-Ingredient") %>% html_text()
+  return(list(recipe = recipe, prep_time = prep_time, ingredients = ingredients))
+} 
+
+get_recipe("http://www.foodnetwork.com/recipes/food-network-kitchen/pancakes-recipe-1913844")
+
+# it does not work and using the SelectorGadget on Chrome did not work either
+
+# Assessment: Web Scraping
+
+library(rvest)
+url <- "https://web.archive.org/web/20181024132313/http://www.stevetheump.com/Payrolls.htm"
+h <- read_html(url)
+
+# Storing all the html tables objects 
+nodes <- html_nodes(h, "table")  # there are 22 table nodes
+
+# how to see the content of the table node nr. 8
+html_text(nodes[[8]])
+
+# Converting the content of node nr. 8 in a table/data frame
+html_table(nodes[[8]])
+
+# Question 1 
+# Convert the first four tables in nodes to data frames and inspect them.
+
+html_table(nodes[[1]])
+html_table(nodes[[2]])
+html_table(nodes[[3]])
+html_table(nodes[[4]])
+
+# or with only one single line of code
+
+sapply(nodes[1:4], html_table)
+
+# Question 1 - Answer: Table 2, 3 and 4 - but table 2 has not content at all, it is a tibble 1x2 with not information (content)
+# about Rank, Team, Payroll.
+
+# Question 2
+# For the last 3 components of nodes, which of the following are true? 
+
+html_table(nodes[[length(nodes)-2]])
+html_table(nodes[[length(nodes)-1]])
+html_table(nodes[[length(nodes)]])
+
+# Question 3 
+# Create a table called tab_1 using entry 10 of nodes. Create a table called tab_2 using entry 19 of nodes.
+
+tab_1 <- html_table(nodes[[10]])
+tab_2 <- html_table(nodes[[19]])
+
+tab_1  # tab_1 is right so
+tab_2  # tab_2 has the problem: the first row has the column names
+
+# Note that the column names should be c("Team", "Payroll", "Average"). 
+# You can see that these column names are actually in the first data row of each table, 
+# and that tab_1 has an extra first column No. that should be removed so that the column names for both tables match.
+
+# Remove the extra column in tab_1, remove the first row of each dataset, and change the column names 
+# for each table to c("Team", "Payroll", "Average"). Use a full_join() by the Team to combine these two tables.
+
+col_names <- c("Team", "Payroll", "Average")
+
+# tab_1 <- tab_1[-1, -1]  # no need to transform tab_1 removing the first row and the first column because tab_1 is ok
+tab_1
+
+tab_2 <- tab_2[-1,]  # removing from tab_2 the first row
+tab_2
+
+
+names(tab_2) <- col_names  # replacing the column names of tab_2
+
+
+tab_3 <- full_join(tab_1,tab_2, by = "Team")
+
+# How many rows are in the joined data table?
+nrow(tab_3)
+
+# Question 4 and 5: Introduction
+
+url <- "https://web.archive.org/web/20210606000626/https://en.wikipedia.org/w/index.php?title=Opinion_polling_for_the_United_Kingdom_European_Union_membership_referendum&oldid=896735054"
+
+# Question 4: 
+# Assign tab to be the html nodes of the "table" class.
+# How many tables are in this Wikipedia page?
+
+h <- read_html(url)  # creating an object h to save the url/website information
+
+# Storing all the html tables objects 
+tab <- html_nodes(h, "table")  # there are 40 table nodes
+length(tab)
+
+# Question 5
+
+# Inspect the first several html tables using html_table() with the argument fill=TRUE (you can read about 
+# this argument in the documentation). Find the first table that has 9 columns with the first column named "Date(s) conducted".
+
+# What is the first table number to have 9 columns where the first column is named "Date(s) conducted"?
+
+tab[[5]] %>%
+  html_table(fill = TRUE) %>%
+  names()
+
+# Section 3: String Processing
