@@ -1339,3 +1339,344 @@ url <- "https://en.wikipedia.org/w/index.php?title=Opinion_polling_for_the_Unite
 tab <- read_html(url) %>% html_nodes("table")
 polls <- tab[[6]] %>% html_table(fill = TRUE)
 
+
+##### IMPORTANT: THIS ASSESSMENT MUST BE DONE (Question 5 to Question 8)
+
+# Section 4: Dates, Times, and Text Mining
+
+# inspect the startdate column of 2016 polls data, a Date type
+
+library(tidyverse)
+library(dslabs)
+data("polls_us_election_2016")
+
+polls_us_election_2016$startdate %>% 
+  head
+
+class(polls_us_election_2016$startdate)
+
+# Converting the date to numbers (Januar 1, 1970 is in programming the begin of an epoch)
+
+as.numeric(polls_us_election_2016$startdate) %>% 
+  head
+
+# ggplot is aware of dates
+polls_us_election_2016 %>% 
+  filter(pollster == "Ipsos" & state =="U.S.") %>%
+  ggplot(aes(startdate, rawpoll_trump)) +
+  geom_line()
+
+# lubridate: the tidyverse date package
+library(lubridate)
+
+# select some random dates from polls
+set.seed(2)
+dates <- sample(polls_us_election_2016$startdate, 10) %>% 
+  sort
+dates
+
+# extract month, day, year from date strings
+
+data.frame(date = dates, 
+           month = month(dates),
+           day = day(dates),
+           year = year(dates))
+
+month(dates, label = TRUE)    # extract month label
+
+# parsers is a set of functions, which converts string into date
+
+# ymd works on mixed date styles
+
+x <- c(20090101, "2009-01-02", "2009 01 03", "2009-1-4",
+       "2009-1, 5", "Created on 2009 1 6", "200901 !!! 07")
+ymd(x)
+class(x) # it is a character
+
+# Format of dates - ISO 8601 2024-05-07
+###### GKL has the format 07.05.2024 07:11
+
+gkl_date <- c("07.05.2024 10:30")
+class(gkl_date)
+
+dmy_hm(gkl_date)
+class(gkl_date)  # it is still a character
+
+gkl <- as_date("07.05.2024 10:30")  # converting the string into a date format
+                                    # object must be saved
+class(gkl)
+########
+
+Sys.time()
+# "2024-05-07 14:42:05 CEST"  - Central European Summer Time 
+
+
+# different parsers extract year, month and day in different orders
+x <- "09/01/02"
+ymd(x)
+mdy(x)
+ydm(x)
+myd(x)
+dmy(x)
+dym(x)
+
+now()    # current time in your time zone
+now("GMT")    # current time in GMT: Greenwich Mean Time
+now() %>% 
+  hour()    # current hour
+now() %>% 
+  minute()    # current minute
+now() %>% 
+  second()    # current second
+
+# to see all the available time zones
+OlsonNames()
+
+# parse time
+x <- c("12:34:56")
+hms(x)
+
+
+#parse datetime
+x <- "Nov/2/2012 12:34:56"
+mdy_hms(x)
+
+# Text Mining
+# Sentiment analysis: analize a text to figure out if there are negative, neutral or positive sentiments
+
+# Case study: Trump Tweets
+
+# We will use the following libraries
+
+library(tidyverse)
+library(ggplot2)
+library(lubridate)
+library(tidyr)
+library(scales)
+set.seed(1)
+
+# importing the dataset
+
+url <- 'https://drive.google.com/file/d/16wm-2NTKohhcA26w-kaWfhLIGwl_oX95/view'
+trump_tweets <- map(2009:2017, ~sprintf(url, .x)) %>%
+  map_df(jsonlite::fromJSON, simplifyDataFrame = TRUE) %>%
+  filter(!is_retweet & !str_detect(text, '^"')) %>%
+  mutate(created_at = parse_date_time(created_at, orders = "a b! d! H!:M!:S! z!* Y!", tz="EST")) 
+
+# For convenience we include the result of the code above in the dslabs package:
+
+library(dslabs)
+data("trump_tweets")
+
+# This is data frame with information about the tweet:
+head(trump_tweets)
+
+# The variables that are included are:
+  
+names(trump_tweets)
+? trump_tweets
+
+# The tweets are represented by the text variable:
+
+trump_tweets %>% 
+  select(text) %>% 
+  head
+
+# and the source variable tells us the device that was used to compose 
+# and upload each tweet:
+
+trump_tweets %>% 
+  count(source) %>% 
+  arrange(desc(n))
+
+# We can use extract to remove the Twitter for part of the source and filter out retweets.
+
+trump_tweets %>% 
+  extract(source, "source", "Twitter for (.*)") %>%
+  count(source) 
+
+# We are interested in what happened during the campaign
+
+campaign_tweets <- trump_tweets %>% 
+  extract(source, "source", "Twitter for (.*)") %>%
+  filter(source %in% c("Android", "iPhone") &
+           created_at >= ymd("2015-06-17") & 
+           created_at < ymd("2016-11-08")) %>%
+  filter(!is_retweet) %>%
+  arrange(created_at)  # desc sorted by "created by"
+
+head(campaign_tweets)
+
+# We can now use data visualization to explore the possibility that two different groups
+# were tweeting from these devices. For each tweet, we will extract the hour, 
+# in the east coast (EST), it was tweeted then compute the proportion of tweets tweeted 
+# at each hour for each device.
+
+ds_theme_set()
+
+
+campaign_tweets %>%
+  mutate(hour = hour(with_tz(created_at, "EST"))) %>%
+  count(source, hour) %>%
+  group_by(source) %>%
+  mutate(percent = n / sum(n)) %>%
+  ungroup %>%
+  ggplot(aes(hour, percent, color = source)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels = percent_format()) +
+  labs(x = "Hour of day (EST)",
+       y = "% of tweets",
+       color = "")
+
+# We notice a big peak for the Android in early hours of the morning, between 6 and 8 AM. 
+# There seems to be a clear different in these patterns. 
+
+# Text as data
+
+# The tidytext package helps us convert free from text into a tidy table. 
+# Having the data in this format greatly facilitates data visualization and applying 
+# statistical techniques.
+
+install.packages("tidytext")
+library(tidytext)
+
+# The main function needed to achieve this is unnest_tokens(). 
+# A token refers to the units that we are considering to be a data point. 
+
+example <- tibble(line = c(1, 2, 3, 4),
+                      text = c("Roses are red,", "Violets are blue,", "Sugar is sweet,", "And so are you."))
+example
+
+example %>% 
+  unnest_tokens(word, text)
+
+# Now let's look at a quick example with a tweet number 3008:
+
+i <- 3008
+
+campaign_tweets$text[i]
+
+campaign_tweets[i,] %>% 
+  unnest_tokens(word, text) %>%
+  select(word)
+
+# Important characters in twitter were omitted by the unnest_tokens() function
+# because these are not standard English written characters. So, lets define a 
+# pattern with these special tokens for twitter
+
+# The pattern appears complex but all we are defining is a patter that starts 
+# with @, # or neither and is followed by any combination of letters or digits:
+
+pattern <- "([^A-Za-z\\d#@']|'(?![A-Za-z\\d#@]))"
+
+# meaning of ?
+
+# We can now use the unnest_tokens() function with the regex option and 
+# appropriately extract the hashtags and mentions:
+
+campaign_tweets[i,] %>% 
+  unnest_tokens(word, text, token = "regex", pattern = pattern) %>%
+  select(word)
+
+# Another minor adjustment we want to make is remove the links to pictures:
+  
+campaign_tweets[i,] %>% 
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", ""))  %>%
+  unnest_tokens(word, text, token = "regex", pattern = pattern) %>%
+  select(word)
+
+# Now we are ready to extract the words for all our tweets.
+
+tweet_words <- campaign_tweets %>% 
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", ""))  %>%
+  unnest_tokens(word, text, token = "regex", pattern = pattern) 
+
+# there are 68790 words
+
+# And we can now answer questions such as "what are the most commonly used words?"
+
+tweet_words %>% 
+  count(word) %>%
+  arrange(desc(n))
+
+stop_words  #are not informative words, like prepositions. Tidytext has database with these.
+            # more than 1140
+
+# If we filter out rows representing stop words with filter(!word %in% stop_words$word):
+
+tweet_words <- campaign_tweets %>% 
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", ""))  %>%
+  unnest_tokens(word, text, token = "regex", pattern = pattern) %>%
+  filter(!word %in% stop_words$word ) 
+
+tweet_words %>%
+  count(word) %>%
+  arrange(desc(n))
+
+# We end up with a much more informative set of top 10 tweeted words:
+
+tweet_words %>% 
+  count(word) %>%
+  top_n(10, n) %>%
+  mutate(word = reorder(word, n)) %>%
+  arrange(desc(n))
+
+# Cleaning our tokens:
+# regex to find just numbers like years: ^\d+$
+# Second, some of our tokens come from a quote and they start with '. 
+# We want to remove the ' when it's at the start of a word, so we will use str_replace()
+
+tweet_words <- campaign_tweets %>% 
+  mutate(text = str_replace_all(text, "https://t.co/[A-Za-z\\d]+|&amp;", ""))  %>%
+  unnest_tokens(word, text, token = "regex", pattern = pattern) %>%
+  filter(!word %in% stop_words$word &
+           !str_detect(word, "^\\d+$")) %>%
+  mutate(word = str_replace(word, "^'", ""))
+
+head(tweet_words)
+
+# For each word we want to know if it is more likely to come from an Android tweet or an iPhone tweet.
+
+# For each device and a given word, let's call it y, we compute the odds or 
+# the ratio between the proportion of words that are y and not y and compute the ratio 
+# of those odds. Here we will have many proportions that are 0 so we use the 0.5 correction.
+
+android_iphone_or <- tweet_words %>%
+  count(word, source) %>%
+  spread(source, n, fill = 0) %>%
+  mutate(or = (Android + 0.5) / (sum(Android) - Android + 0.5) / 
+           ( (iPhone + 0.5) / (sum(iPhone) - iPhone + 0.5)))
+
+android_iphone_or %>% 
+  arrange(desc(or))
+
+android_iphone_or %>% 
+  arrange(or)
+
+# Given that several of these words are overall low frequency words we can impose a filter 
+# based on the total frequency like this:
+
+android_iphone_or %>% 
+  filter(Android+iPhone > 100) %>%
+  arrange(desc(or))
+
+android_iphone_or %>% 
+  filter(Android+iPhone > 100) %>%
+  arrange(or)
+
+# Sentiment Analysis
+
+table(sentiments$sentiment)
+
+# We can see this using the tidytext function get_sentiments():
+get_sentiments("bing")
+
+# The AFINN lexicon assigns a score between -5 and 5, with -5 the most negative and 5 the most positive.
+install.packages("textdata")
+library(textdata)
+
+get_sentiments("afinn")
+
+get_sentiments("loughran") %>% count(sentiment)
+get_sentiments("nrc") %>% count(sentiment)
