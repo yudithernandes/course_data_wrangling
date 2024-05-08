@@ -1532,7 +1532,7 @@ campaign_tweets %>%
 # We notice a big peak for the Android in early hours of the morning, between 6 and 8 AM. 
 # There seems to be a clear different in these patterns. 
 
-# Text as data
+# Text as data (für die Pflege)
 
 # The tidytext package helps us convert free from text into a tidy table. 
 # Having the data in this format greatly facilitates data visualization and applying 
@@ -1678,5 +1678,193 @@ library(textdata)
 
 get_sentiments("afinn")
 
-get_sentiments("loughran") %>% count(sentiment)
-get_sentiments("nrc") %>% count(sentiment)
+# The loughran and nrc lexicons provide several different sentiments:
+
+# loughran: constraining, litigious, negative, positive, superfluous, uncertainty
+get_sentiments("loughran") %>% 
+  count(sentiment)
+
+# nrc: anger, anticipation, disgust, fear, joy, negative, positive, sadness, surprise, trust
+get_sentiments("nrc") %>% 
+  count(sentiment)
+
+# For the analysis here we are interested in exploring the different sentiments of each tweet, so we will use the nrc lexicon:
+
+nrc <- get_sentiments("nrc") %>%
+  select(word, sentiment)
+
+# We can combine the words and sentiments using inner_join(), which will only keep words associated with a sentiment. 
+# Here are 10 random words extracted from the tweets:
+
+tweet_words %>% 
+  inner_join(nrc, by = "word",  relationship = "many-to-many") %>% 
+  select(source, word, sentiment) %>% 
+  sample_n(10)
+
+# Now we are ready to perform a quantitative analysis comparing Android and iPhone 
+# by comparing the sentiments of the tweets posted from each device. 
+# we will count and compare the frequencies of each sentiment appears for each device.
+
+sentiment_counts <- tweet_words %>%
+  left_join(nrc, by = "word") %>%
+  count(source, sentiment) %>%
+  spread(source, n) %>%
+  mutate(sentiment = replace_na(sentiment, replace = "none"))
+sentiment_counts
+
+# Because more words were used on the Android than on the phone (% to see relative weight)
+
+tweet_words %>% 
+  group_by(source) %>% 
+  summarize(n = n())
+
+# for each sentiment we can compute the odds of being in the device: proportion of words with sentiment versus proportion of words 
+# without and then compute the odds ratio comparing the two devices:
+
+sentiment_counts %>%
+  mutate(Android = Android / (sum(Android) - Android) , 
+         iPhone = iPhone / (sum(iPhone) - iPhone), 
+         or = Android/iPhone) %>%
+  arrange(desc(or))
+
+# In order to test, if the difference are statistically significant: we can compute, for each sentiment, an odds ratio and confidence interval.
+# We will add the two values we need to form a two-by-two table and the odds ratio:
+
+library(broom)
+# ? broom - convert statistical objetcs into tidy tibbles
+
+log_or <- sentiment_counts %>%
+  mutate( log_or = log( (Android / (sum(Android) - Android)) / (iPhone / (sum(iPhone) - iPhone))),
+          se = sqrt( 1/Android + 1/(sum(Android) - Android) + 1/iPhone + 1/(sum(iPhone) - iPhone)),
+          conf.low = log_or - qnorm(0.975)*se,
+          conf.high = log_or + qnorm(0.975)*se) %>%
+  arrange(desc(log_or))
+
+log_or
+
+# Question: why were logarithmic transformation applied?
+
+# A graphical visualization shows some sentiments that are clearly over represented:
+
+log_or %>%
+  mutate(sentiment = reorder(sentiment, log_or),) %>%
+  ggplot(aes(x = sentiment, ymin = conf.low, ymax = conf.high)) +
+  geom_errorbar() +
+  geom_point(aes(sentiment, log_or)) +
+  ylab("Log odds ratio for association between Android and sentiment") +
+  coord_flip() 
+
+# We see that the disgust, anger, negative sadness and fear sentiments are associated with the Android
+# in a way that is hard to explain by chance alone. Words not associated to a sentiment were strongly
+# associated with the iPhone source, which is in agreement with the original claim about hyperbolic tweets.
+
+# If we are interested in exploring which specific words are driving these differences, we can back to our android_iphone_or object:
+
+android_iphone_or %>% inner_join(nrc) %>%
+  filter(sentiment == "disgust" & Android + iPhone > 10) %>%
+  arrange(desc(or))
+
+android_iphone_or %>% inner_join(nrc) %>%
+  filter(sentiment == "anger" & Android + iPhone > 10) %>%
+  arrange(desc(or))
+
+android_iphone_or %>% inner_join(nrc) %>%
+  filter(sentiment == "positive" & Android + iPhone > 10) %>%
+  arrange(desc(or))
+
+# We can make a graph:
+
+android_iphone_or %>% 
+  inner_join(nrc, by = "word") %>%
+  mutate(sentiment = factor(sentiment, levels = log_or$sentiment)) %>%
+  mutate(log_or = log(or)) %>%
+  filter(Android + iPhone > 10 & abs(log_or)>1) %>%
+  mutate(word = reorder(word, log_or)) %>%
+  ggplot(aes(word, log_or, fill = log_or < 0)) +
+  facet_wrap(~sentiment, scales = "free_x", nrow = 2) + 
+  geom_bar(stat="identity", show.legend = FALSE) +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) 
+
+# what is the meaning of green/red color?
+
+# Assessment Part 1: Dates, Times, and Text Mining
+
+# Use the following libraries and options for coding questions:
+
+library(dslabs)
+library(lubridate)
+options(digits = 3)    # 3 significant digits
+
+# Question 3
+
+# Loading the data frame brexit_polls
+
+data(brexit_polls)
+
+names(brexit_polls) # to see the variables´ names
+
+# How many polls had a start date (startdate) in April (month number 4)?
+
+month <- month(brexit_polls$startdate, label = FALSE )
+table(month)  # 25
+
+# Option of 1965eric
+sum(month(brexit_polls$startdate) == 4)
+
+# Use the round_date() function on the enddate column with the argument unit="week". How many polls ended the week of 2016-06-12?  
+
+table(round_date(brexit_polls$enddate, unit = "week"))  # 13
+
+# Option of 1965eric
+sum(round_date(brexit_polls$enddate, unit = "week") == "2016-06-12")
+
+# Question 4
+
+# Use the weekdays() function from lubridate to determine the weekday on which each poll ended (enddate).
+
+? weekdays
+
+Sys.setlocale("LC_TIME", "en_US")
+
+table(weekdays(brexit_polls$enddate, abbreviate = FALSE)) # stackoverflow: to avoid the german names of the week: Sys.setlocale("LC_TIME", "en_US")
+# Answer: Sunday
+
+# Option 1965eric probably something like which.max
+max(weekdays(brexit_polls$enddate)) # Answer: Wednesday....
+
+# Question 5
+
+# Load the movielens data frame from dslabs.
+
+data(movielens)
+head(movielens)
+glimpse(movielens) # to see the variables´class
+
+# This data frame contains a set of about 100,000 movie reviews. The timestamp column contains the review date as the number 
+# of seconds since 1970-01-01 (epoch time).
+
+# Convert the timestamp column to dates using the lubridate as_datetime() function.
+
+movielens <- movielens %>%
+  mutate(timestamp_1 = as_datetime(timestamp))
+
+head(movielens)
+
+# Which year had the most movie reviews?
+table(movielens$year)
+class(movielens$year)
+as.numeric(movielens$year)
+
+which.max(movielens$year)  # the position is the index 2588
+
+which.max(table(movielens$year)) # 1995 ok, but what is the meaning of 82? the position in the table
+
+movielens$year[2588]  # year 2016, because it is the last year. Not this way We want year 1995 with 6635 reviews
+
+max(table(movielens$year)) # the max is 6635, but how can a get the year?
+
+names(which.max(table(movielens$year))) # 1995
+
+# Which hour of the day had the most movie reviews?
+
+
