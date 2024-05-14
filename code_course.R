@@ -1570,7 +1570,7 @@ campaign_tweets[i,] %>%
 
 pattern <- "([^A-Za-z\\d#@']|'(?![A-Za-z\\d#@]))"
 
-# meaning of ?
+# meaning of ? - start with?
 
 # We can now use the unnest_tokens() function with the regex option and 
 # appropriately extract the hashtags and mentions:
@@ -1821,7 +1821,7 @@ sum(round_date(brexit_polls$enddate, unit = "week") == "2016-06-12")
 # Question 4
 
 # Use the weekdays() function from lubridate to determine the weekday on which each poll ended (enddate).
-
+# On which weekday did the greatest number of polls end?
 ? weekdays
 
 Sys.setlocale("LC_TIME", "en_US")
@@ -1830,7 +1830,8 @@ table(weekdays(brexit_polls$enddate, abbreviate = FALSE)) # stackoverflow: to av
 # Answer: Sunday
 
 # Option 1965eric probably something like which.max
-max(weekdays(brexit_polls$enddate)) # Answer: Wednesday....
+max(weekdays(brexit_polls$enddate)) # this does not work. The right code is what I did
+min(weekdays(brexit_polls$enddate)) # max and min gives the first and last name of the day of the week according to the sorted names
 
 # Question 5
 
@@ -1850,21 +1851,191 @@ movielens <- movielens %>%
 
 head(movielens)
 
-# Which year had the most movie reviews?
+# Important: here "year" is the year where the movie was released, it is not the year of the review!!!
+# That is why the answer is not 1995 and not 12:54:42
+# 1995 is the year with the most movies
+
 table(movielens$year)
 class(movielens$year)
-as.numeric(movielens$year)
-
-which.max(movielens$year)  # the position is the index 2588
-
-which.max(table(movielens$year)) # 1995 ok, but what is the meaning of 82? the position in the table
-
-movielens$year[2588]  # year 2016, because it is the last year. Not this way We want year 1995 with 6635 reviews
-
-max(table(movielens$year)) # the max is 6635, but how can a get the year?
 
 names(which.max(table(movielens$year))) # 1995
 
-# Which hour of the day had the most movie reviews?
+# Which year had the most movie reviews? 
+# to answer this question, I have to extract from timestamp_1 the year
 
+# extract month, day, year from date strings
+
+year_review <- data.frame(date = movielens$timestamp_1, 
+           month = month(movielens$timestamp_1),
+           day = day(movielens$timestamp_1),
+           year = year(movielens$timestamp_1))
+
+head(year_review)
+
+names(which.max(table(year_review$year)))  # Answer: 2000
+
+
+# Which hour of the day had the most movie reviews?
+# to answer this question, try the same as in the previous question. First extract from timestamp_1 the hour
+
+hour_review <- data.frame(date = movielens$timestamp_1,
+                          hour = hour(movielens$timestamp_1))
+
+table(hour_review$hour)
+
+names(which.max(table(hour_review$hour))) # Answer: 20
+
+# Assessment Part 2: Dates, Times, and Text Mining "Project Gutenberg"
+# In this part of the assessment, you will walk through a basic text mining and sentiment analysis task.
+
+# Use these libraries and options:
+  
+install.packages("gutenbergr")
+library(gutenbergr)
+library(dplyr)
+data(gutenberg_metadata)
+
+# Question 6
+# Use str_detect() to find the ID of the novel Pride and Prejudice.
+
+gutenberg_metadata %>%
+  filter(str_detect(title, "Pride and Prejudice"))
+
+# the answer is 6 and not 7, because the id 37431 is double
+
+# Question 7
+
+# Notice that there are several versions of the book. The gutenberg_works() function filters this table to remove replicates 
+# and include only English language works. Use this function to find the ID for Pride and Prejudice.
+
+# What is the correct ID number?
+gutenberg_works(title == "Pride and Prejudice", languages = "en")
+
+# Question 8
+
+# Use the gutenberg_download() function to download the text for Pride and Prejudice. 
+# Use the tidytext package to create a tidy table with all the words in the text. Save this object as words.
+
+
+? gutenberg_download
+
+
+
+mirror="http://mirror.csclub.uwaterloo.ca/gutenberg/" 
+
+mirror <- "http://mirror.csclub.uwaterloo.ca/gutenberg/" 
+
+book <- gutenberg_download(1342, mirror = mirror)
+
+# How many words are present in the book?
+# Here, we can define words as tokens which do not consist completely of special characters, and are split on hyphens. 
+# Read the unnest_tokens() documentation for word tokenization details.
+
+words <- book %>%
+  unnest_tokens(word, text)
+
+head(words)
+count(words)  # Answer: 127996
+  
+
+# Question 9
+
+# Remove stop words (words without information about sentiments, ex. prepositions) from the words object. Recall that stop words are defined in the stop_words data frame from the tidytext package.
+# How many words remain?
+
+
+words <- words %>%
+filter(!word %in% stop_words$word ) 
+
+count(words)  # 39698
+
+# Question 10
+
+# After removing stop words, detect and then filter out any token that contains a digit from words.
+# How many words remain?
+
+# to answer this, I have to create a pattern with regex that contains digits
+
+table(str_detect(words$word, "\\d"))  #there are 144 tokens with digits in the vector word and 39554 without a tokens without digits
+
+words <- words %>%
+  filter(!str_detect(word, "\\d" ))
+
+count(words)
+
+# Question 11
+
+# Analyze the most frequent words in the novel after removing stop words and tokens with digits.
+
+# How many words appear more than 100 times in the book?
+
+words %>%
+  count(word) %>%
+  filter(n > 100) %>%
+  nrow() # 25 words
+
+
+# What is the most common word in the book?
+
+names(which.max(table(words$word))) # elizabeth
+
+# also 
+
+words %>%
+  count(word) %>%
+  arrange(desc(n))  #  elizabeth
+
+# How many times does that most common word appear?
+
+# elizabeth n = 605
+
+# Question 12
+
+# Define the afinn lexicon:
+  
+afinn <- get_sentiments("afinn")
+
+table(afinn) # affin lexicon has values between -5 and 5, and the words listed are assigned to these categories
+
+# Use this afinn lexicon to assign sentiment values to words. Keep only words that are present in both words and the afinn lexicon. 
+# Save this data frame as afinn_sentiments.
+
+afinn_sentiments <- words %>%
+  inner_join(afinn, by = "word", relationship = "many-to-many")
+
+# How many elements of words have sentiments in the afinn lexicon?
+
+nrow(afinn_sentiments) # 6353
+
+# What proportion of words in afinn_sentiments have a positive value?
+# to answer this question: create a variable for positiv values and another for the negative values (see ex. Android/iPhone - Trump)
+
+afinn_value <- afinn_sentiments %>%
+  count(value) %>%
+  mutate(percent = n / sum(n)) %>%
+  arrange(desc(value)) 
+
+afinn_value %>%
+  filter(value >= 0) %>%
+  pull(percent) %>%
+  sum()
+  
+# Answer: 0.56
+
+# How many elements of afinn_sentiments have a value of 4?
+
+afinn_value <- afinn_sentiments %>%
+  count(value) %>%
+  mutate(percent = n / sum(n)) %>%
+  arrange(desc(value))
+afinn_value # Answer: 55 elements
+
+
+# Comprehensive Assessment and Course Wrap-up
+# Comprehensive Assessment: Puerto Rico Hurricane Mortality
+
+library(tidyverse)
+install.packages("pdftools")
+library(pdftools)
+options(digits = 3)
 
