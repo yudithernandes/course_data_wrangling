@@ -655,16 +655,35 @@ tab[[5]] %>%
 
 # read in raw murders data from Wikipedia
 url <- "https://en.wikipedia.org/w/index.php?title=Gun_violence_in_the_United_States_by_state&direction=prev&oldid=810166167"
+
 murders_raw <- read_html(url) %>% 
   html_nodes("table") %>% 
   html_table() %>%
   .[[1]] %>%
   setNames(c("state", "population", "total", "murder_rate"))
 
+# code from video, the professor works with table 2 and not with table 1
+
+url <- "https://en.wikipedia.org/wiki/Murder_in_the_United_States_by_state"
+murders_raw <- read_html(url) %>% 
+  html_nodes("table") %>% 
+  html_table()
+
+head(murders_raw)
+
+murders_raw <- murders_raw[[2]] %>%
+  setNames(c("state", "population", "total", "murders", "gun_murders", "gun_ownership", "total_rate", "murder_rate", "gun_murder_rate"))
+head(murders_raw)
+
+# ---- code from video end, but it is not the right table ----
+
 # inspect data and column classes
 head(murders_raw)
-class(murders_raw$population)
-class(murders_raw$total)
+class(murders_raw$population) # this column should contain number and not character
+class(murders_raw$total) 
+
+# this column should contain number and not character, this is very common when web scraping. In order, to improve the website readability
+# they put commas, and R read it as text character and not as number. The function parse_number() help us to convert it into numeric
 
 # Defining Strings: Single and Double Quotes and How to Escape
 
@@ -708,7 +727,7 @@ class(murders_raw$population)
 commas <- function(x) any(str_detect(x, ","))
 
 murders_raw %>% 
-  summarize_all(funs(commas))
+  summarize_all(funs(commas))  # it shows a bolean list with FALSE if no comma, and TRUE if there is at least a comma in the column.
 
 # replace commas with the empty string and convert to numeric
 test_1 <- str_replace_all(murders_raw$population, ",", "")
@@ -718,17 +737,19 @@ class(test_1)
 
 # parse_number() = str_replace_all()
 
-# parse_number also removes commas and converts to numeric
+# parse_number also removes commas and converts to numeric. With parse_number we do not need the argument "," and replace with ""
 test_2 <- parse_number(murders_raw$population)
 identical(test_1, test_2)
 
 # coercing in one step with parse_number
 
 murders_new <- murders_raw %>% 
-  mutate_at(2:3, parse_number)
+  mutate_at(2:4, parse_number)  # 2:4 are the columns with commas
 
 murders_new %>% 
-  head
+  head  # the commas are gone and the columns are double = numeric
+
+class(murders_new$population)
 
 # Assessment String Processing Part 1
 
@@ -750,6 +771,7 @@ murders_new %>%
 # both column two and three (Sales and Profit). You then need to use 
 # the “as.numeric” command to convert these columns from character strings to numbers.
 
+# 3.2: String Processing Part 2
 # Case Study 2: Reported Heights
 
 # load raw heights data and inspect
@@ -765,20 +787,29 @@ head(x)
 
 sum(is.na(x)) # there are 81 na after coercing character into numeric
 
-# keep only entries that result in NAs
+# keep only entries that result in NAs, this are the entries with problems which could not coerce
 reported_heights %>% 
   mutate(new_height = as.numeric(height)) %>%
   filter(is.na(new_height)) %>%
   head(n=81)
 
-sum(reported_heights$new_height)
+# let us fix these entries!
 
 # calculate cutoffs that cover 99.999% of human population
 alpha <- 1/10^6
-qnorm(1-alpha/2, 69.1, 2.9)  # calculating the max value of heights with 99% of prob - 69.1 and 2.9 are mean and sd
-qnorm(alpha/2, 63.7, 2.7)    # calculating the min value of heigths with 99% of prob - 63.7 and 2.7 are mean and sd
 
-# keep only entries that either result in NAs or are outside the plausible range of heights
+options(scipen=999) # to avoid scientific numeration
+alpha # alpha is so small, so that we get the 99,999999%
+
+qnorm(1-alpha/2, 69.1, 2.9) # 84 # calculating the max value of heights with 99% of prob - 69.1 and 2.9 are mean and sd
+qnorm(alpha/2, 63.7, 2.7)  # 50  # calculating the min value of heigths with 99% of prob - 63.7 and 2.7 are mean and sd
+# the tales are used as arguments in the not_inches() function
+
+# für GKL Projekt: I can compute min und max probable values for prices for each EAN among n competitors. This will be also 
+# useful to identify outliers. Mean and sd are quite easy to calculate.
+
+
+# function that keeps only entries that either result in NAs or are outside the plausible range of heights
 not_inches <- function(x, smallest = 50, tallest = 84){
   inches <- suppressWarnings(as.numeric(x))
   ind <- is.na(inches) | inches < smallest | inches > tallest
@@ -799,10 +830,10 @@ length(problems)  #there are 292 values with problems
 
 problems
 
-# after identiying the problems values, we have to look after patterns. There are mostly three patterns.
+# after identifying the problems values, we have to look after patterns. There are mostly three patterns.
 # define the form of the patterns (see cheatsheet for the nomenclature)
 # str_subset() is a function that find matching elements
-# cat: concatenate and print
+# cat: concatenate and print it how it really looks like
 
 # 10 examples of x'y or x'y" or x'y\"
 pattern <- "^\\d\\s*'\\s*\\d{1,2}\\.*\\d*'*\"*$"
@@ -813,21 +844,18 @@ str_subset(problems, pattern) %>%
 # 10 examples of x.y or x,y
 pattern <- "^[4-6]\\s*[\\.|,]\\s*([0-9]|10|11)$"
 str_subset(problems, pattern) %>% 
-  head(n=50) %>% 
-  cat  
+  head(n=50) %>%
+  cat
 
 
 # 10 examples of entries in cm rather than inches
-ind <- which(between(suppressWarnings(as.numeric(problems))/2.54, 54, 81) ) %>%
-  cat
-
+ind <- which(between(suppressWarnings(as.numeric(problems))/2.54, 54, 81) )  # why 2.54 (1 inches = 2.54 cm), 54, 81?
 ind <- ind[!is.na(ind)]
-
 problems[ind] %>% 
-  head(n=50) %>% 
+  head(n=10) %>% 
   cat
 
-#### Regular Expressions (regex)
+#### Regular Expressions (regex): technique that enables us to detect patterns and extract these parts we want
 
 # load stringr through tidyverse
 library(tidyverse)
@@ -835,11 +863,13 @@ library(tidyverse)
 # detect whether a comma is present
 pattern <- ","
 str_detect(reported_heights$height, pattern) 
+table(str_detect(reported_heights$height, pattern))  # there are 9 ","
 
 # show the subset of strings including "cm"
 str_subset(reported_heights$height, "cm")
 
 # Example how to use special characters with regex
+
 # use the "or" symbol inside a regex (|)
 yes <- c("180 cm", "70 inches")
 no <- c("180", "70''")
@@ -862,7 +892,7 @@ str_detect(s, pattern)
 str_view_all(s, pattern)
 
 
-# Character classes
+# Character classes: are used to define a series of characters tht can be matched
 
 # s was defined in the previous video
 yes <- c("5", "6", "5'10", "5 feet", "4'11")
@@ -878,23 +908,35 @@ yes <- as.character(4:7)
 no <- as.character(1:3)
 s <- c(yes, no)
 str_detect(s, "[4-7]")
+str_view_all(s, "[4-7]")
+
+# Important: "[1-20]" does not mean 1,2,3,...,19,20 but only 0,1,2
+# "[a-z]"  - all lower case letters
+# "[A-Z]" - all upper case letters
+# "[a-zA-Z]" - all letters
+
+# Anchors: let us define patterns taht must start or end at specific places (^ and $)
 
 # ^ means start of string, $ means end of string
-pattern <- "^\\d$"
+pattern <- "^\\d$"  # pattern represents a string with only one digit
 yes <- c("1", "5", "9")
 no <- c("12", "123", " 1", "a4", "b")
 s <- c(yes, no)
-str_view(s, pattern)
+str_view_all(s, pattern)
 str_detect(s, pattern)
+
+
+# Quantifiers: we define by curly brackets the possible number of times the previous entry repeats
 
 # curly braces define quantifiers: 1 or 2 digits 
 pattern <- "^\\d{1,2}$"
 yes <- c("1", "5", "9", "12")
 no <- c("123", "a4", "b")
-str_view(c(yes, no), pattern)
+str_view_all(c(yes, no), pattern)
 
 # combining character class, anchors and quantifier
-pattern <- "^[4-7]'\\d{1,2}\"$"
+pattern <- "^[4-7]'\\d{1,2}\"$"   # Translation: the string starts with any number between 4 and 7, than feet symbol ', 
+# than one or two digits, than ends with inches symbol "
 yes <- c("5'7\"", "6'2\"",  "5'12\"")
 no <- c("6,2\"", "6.2\"","I am 5'11\"", "3'2\"", "64")
 str_detect(yes, pattern)
@@ -909,12 +951,14 @@ str_view(problems, pattern)
 
 # inspect examples of entries with problems
 problems[c(2, 10, 11, 12, 15)] %>%    # why c(2, 10, 11, 12, 15) ?????
-  str_view(pattern)
+  str_view_all(pattern)
 
 str_subset(problems, "inches")
 str_subset(problems, "''")
 
-# replace or remove feet/inches words before matching
+# we want to clean the entries and get only the format x'y
+
+# take than " (inches symbol) out of the pattern, and replace or remove feet/inches words before matching
 pattern <- "^[4-7]'\\d{1,2}$"
 problems %>% 
   str_replace("feet|ft|foot", "'") %>% # replace feet, ft, foot with ' 
@@ -922,17 +966,19 @@ problems %>%
   str_detect(pattern) %>% 
   sum()  # now we have 48 matches to our new pattern
 
+# next problem to solve: spaces
 # R does not ignore whitespace
 identical("Hi", "Hi ")
 
-# \\s represents whitespace
+# in regex \\s represents whitespace. Including whitespaces into the pattern
 pattern_2 <- "^[4-7]'\\s\\d{1,2}\"$"
 str_subset(problems, pattern_2)
 
-# * means 0 or more instances of a character
+# use of quantifiers (ex. *) to improve the design of the pattern
+# * means 0 or more instances of the previous character
 yes <- c("AB", "A1B", "A11B", "A111B", "A1111B")
 no <- c("A2B", "A21B")
-str_detect(yes, "A1*B")   # why is "AB" TRUE if the pattern is "A1*B"? - it matches also zero 1 (not 1)
+str_detect(yes, "A1*B")   # A1*B means none or more 1
 str_detect(no, "A1*B")
 
 # test how *, ? and + differ - the question is: how many spaces there are!
@@ -949,8 +995,14 @@ problems %>%
   str_detect(pattern) %>% 
   sum()   # now we have 53 matches
 
+head(str_view_all(problems, pattern))
 
-# Groups with regex
+### Groups with regex: permits the extraction of values, they are define between parentheses () - like encapsulate
+# Groups do not affect the pattern matching per se, instead, it permits tools to identify specific parts of the pattern 
+# so we can extract them
+
+# Example, we want to change heights written like 5.6 to 5'6, but avoid changing patterns such as 70.5 into 70'5.
+# So, we can not replace . for '
 
 # define regex with and without groups
 pattern_without_groups <- "^[4-7],\\d*$"
@@ -963,33 +1015,72 @@ s <- c(yes, no)
 
 # demonstrate the effect of groups - there is no effect on the matching process
 str_detect(s, pattern_without_groups)
+str_view_all(s, pattern_without_groups)
+
 str_detect(s, pattern_with_groups)
+str_view_all(s, pattern_with_groups)
+
+# Results are identical, the use of groups does not affect the matching process. 
+# The use of groups only signals that we want to save what is captured/encapsulate by the groups
+# So, when defining groups we can use the function str_match() instead str_detect
 
 # demonstrate difference between str_match and str_extract
 str_match(s, pattern_with_groups)
 str_extract(s, pattern_with_groups)
 
-# improve the pattern to recognize more events
+str_match(s, pattern_without_groups) # if we have a pattern without groups, the function str_match() is unable to split
+# the match into the values of each entries.
+
+# str_match split the entries into the position of each value. We can see there is NA if there is not match with the pattern
+# as expected the groups does not affect the process of matching.
+
+# Another advantage of using groups, is that for the process of searching and replacing we can 
+# specify which position of the group we want to replace - with the regex \\i which refers
+# to the i- th group´s  element - ex. \\2 is the value extracted for the second group
+
+# improve the pattern to recognize more events (using groups and i-th groups and replacing)
 pattern_with_groups <-  "^([4-7]),(\\d*)$"
 yes <- c("5,9", "5,11", "6,", "6,1")
 no <- c("5'9", ",", "2,8", "6.1.1")
 s <- c(yes, no)
+str_match(s, pattern_with_groups)
+# str_replace - search in s the pattern and replaced the first matched value with ' and the second matched value with "
 str_replace(s, pattern_with_groups, "\\1'\\2")
 
-# final pattern
+# expected is: 5,9 replaced by 5'9"
+#              5,11 replaced by 5'11"
+#              6,   replaced by 6'
+#              6,1  replaced by 6'1"
+
+# final pattern: we want to replace x.y - x,y - x y by x'y
+# so, we adapt the pattern_with_groups to capture and replace all these cases
+
 pattern_with_groups <-"^([4-7])\\s*[,\\.\\s+]\\s*(\\d*)$"
+
+# \\s*[,\\.\\s+]\\s* all this is allow between the two groups: none or more whitespaces, 
+# [the feet symbol is either comma, point, or at least one whitespaces] and none or more whitespaces
+
 
 # combine stringr commands with the pipe
 str_subset(problems, pattern_with_groups) %>% 
-  head
+  head %>%
+  cat()
+# here are the first 6 matches with the adapted pattern, now we can replace them by x'y
 
 str_subset(problems, pattern_with_groups) %>% 
   str_replace(pattern_with_groups, "\\1'\\2") %>% 
-  head
+  head %>%
+  cat()
 
-# Testing and improving
+# there is only one little problem: 5'25 - we have here 5 feet and 25 inches - 25 inches is too large, it is 63 cm. 
+# So, we will solve this issue later.
+
+### Video: Testing and improving
+# let us see which problems remain and try to adapt the pattern to match these problems
+# let us write a function that captures all the entries that can not be converted into numbers
 
 # function to detect entries with problems
+
 not_inches_or_cm <- function(x, smallest = 50, tallest = 84){
   inches <- suppressWarnings(as.numeric(x))
   ind <- !is.na(inches) &
@@ -1002,8 +1093,13 @@ not_inches_or_cm <- function(x, smallest = 50, tallest = 84){
 problems <- reported_heights %>% 
   filter(not_inches_or_cm(height)) %>%
   .$height
+
+head(problems, 10)
+
 length(problems)  # from the 292 entries with problems, there are 200 that are neither inches nor cm. These were identified 
 # by the function "not_inches_or_cm"
+
+# Now try to correct the 200 entries with problems using different str_replace() functions
 
 converted <- problems %>% 
   str_replace("feet|foot|ft", "'") %>% #convert feet symbols to '
@@ -1013,10 +1109,22 @@ converted <- problems %>%
 # find proportion of entries that fit the pattern after reformatting
 pattern <- "^[4-7]\\s*'\\s*\\d{1,2}$"
 index <- str_detect(converted, pattern)
-mean(index)  # 61% were matched correctly
+index
+mean(index)  # 61% were matched correctly - from the 200 entries with problems, 61% were corrected
+table(index) # 77 entries remain with problems. Which pattern follows these 77 entries. How to correct them?
+
 
 converted[!index]    # show problems
 length(converted[!index])  # 77 entries have yet problems and need to be fitted
+
+# identifying the problems
+# 1 - some students measuring exactly 6 or 7 feet
+# 2 - some students write "cm" or "five"
+# 3 - 5'9 were written with several spaces
+# 4 - other entries are not plausible like 34, 25, 10000, yyy
+# 5 - inches were written with decimal points - 5' and 7.5 inches
+# 6 - some entries are in meter and some of these are European decimals 1,7 is 1.7 meter
+
 
 # Assessment: String Processing Part 2
 
@@ -1038,7 +1146,7 @@ str_detect(animals, pattern)
 schools <- c("U. Kentucky", "Univ New Hampshire", "Univ. of Massachusetts", "University Georgia", "U California", "California State University")
 schools
 
-# Option 1 (don´t - because it does not restrict the beggining with Univ)
+# Option 1 (don´t - because it does not restrict the begining with Univ)
 schools %>% 
   str_replace("Univ\\.?|U\\.?", "University ") %>% 
   str_replace("^University of |^University ", "University of ")
@@ -1058,14 +1166,17 @@ schools %>%
   str_replace("^Univ\\.?\\s|^U\\.?\\s", "University") %>% 
   str_replace("University ", "University of ")
 
-# Separate with regex
+### Video: Separate with regex
+# We want not only identify and match a pattern, but also extract and save the entries of the character vector
 
-# first example - normally formatted heights
+# first example - normally formatted heights with the format x'y
 s <- c("5'10", "6'1")
 tab <- data.frame(x = s)
 tab
 
-# the separate and extract functions behave similarly
+# the separate and extract functions behave similarly, but with extract() from tidyr package we can use regex as argument
+# and gives us the flexibility of using groups.
+
 tab %>% 
   separate(x, c("feet", "inches"), sep = "'")
 
@@ -1075,56 +1186,74 @@ tab %>%
 # second example - some heights with unusual formats
 s <- c("5'10", "6'1\"","5'8inches")
 tab <- data.frame(x = s)
+tab
 
 # separate fails because it leaves in extra characters, but extract keeps only the digits because of regex groups
 tab %>% 
   separate(x, c("feet","inches"), sep = "'", fill = "right")
 
 tab %>% 
-  extract(x, c("feet", "inches"), regex = "(\\d)'(\\d{1,2})")
+  extract(x, c("feet", "inches"), regex = "(\\d)'(\\d{1,2})")  #very nice extract()
 
 # Remaining problems, which were not solved with the previous patterns
 
 # 1- Many students measuring exactly 5 or 6 feet did not enter any inches. For example, 6' - our pattern requires that inches be included.
 # 2- Some students measuring exactly 5 or 6 feet entered just that number.
 # 3- Some of the inches were entered with decimal points. For example 5'7.5''. Our pattern only looks for two digits.
-# 4- Some entires have spaces at the end, for example 5 ' 9.
+# 4- Some entries have spaces at the end, for example 5 ' 9.
 # 5- Some entries are in meters and some of these use European decimals: 1.6, 1,7.
 # 6- Two students added cm.
 # 7- One student spelled out the numbers: Five foot eight inches.
 
 # Solutions:
 
-# 1- add '0
+# 1- add '0 to convert all 6 to 6'0, then our pattern will match
 
 yes <- c("5", "6", "5")
 no <- c("5'", "5''", "5'4")
 s <- c(yes, no)
 str_replace(s, "^([4-7])$", "\\1'0")
 
-# 2 and 4
+# The pattern says it has to start (^), be followed with a digit between 4 and 7, and then end there ($). 
+# The parenthesis defines the group that we pass as \\1 to the replace regex.
+
+# 2 and 4 (not really understood)
+# ? none or one '
+
 str_replace(s, "^([56])'?$", "\\1'0")
 
-# 3
+# 3 - we want allow for inches decimal point and not only two digits - so can 5'7.5 the 7.5 part fits
+# patter must be modified by allowing nor or one .
+
 pattern <- "^[4-7]\\s*'\\s*(\\d+\\.?\\d*)$"
 
-# 5
+# 5 - Meters using commas, we can approach similarly to how we converted the x.y to x'y. 
+# A difference is that we require that the first digit is 1 or 2:
+
 yes <- c("1,7", "1, 8", "2, " )
 no <- c("5,8", "5,3,2", "1.7")
 s <- c(yes, no)
 s
 str_replace(s, "^([12])\\s*,\\s*(\\d*)$", "\\1\\.\\2")
 
+# We will later check if the entries are meters using their numeric values.
+
 # Trimming
 # Spaces at the beginng or end of a string is a general enough problem that there 
 # is a function dedicated to removing them: str_trim.
 
 str_trim("5 ' 9 ")
+str_trim("   5   '   9   ") # eliminate spaces at the ^ or $ of a string, but not in the middle
 
+# 7 - letters instead numbers
 # To upper and to lower case
 
 s <- c("Five feet eight inches")
 str_to_lower(s)
+
+# others:
+str_to_upper(s)
+str_to_title(s)
 
 # Putting it into a function
 # We are now ready to define a procedure that handles converting all the problematic cases.
@@ -1138,6 +1267,7 @@ convert_format <- function(s){
     str_replace("^([12])\\s*,\\s*(\\d*)$", "\\1\\.\\2") %>% #change european decimal
     str_trim() #remove extra space
 }
+
 
 # We can also write a function that converts words to numbers:
 
@@ -1157,13 +1287,17 @@ words_to_numbers <- function(s){
     str_replace_all("eleven", "11")
 }
 
-# Now we can see which problematic entries remain:
+# Now we can see which problematic entries remain after applying both functions
 
 converted <- problems %>% 
   words_to_numbers %>% 
   convert_format
 
+head(converted)
+
 remaining_problems <- converted[not_inches_or_cm(converted)]
+
+head(remaining_problems)
 
 pattern <- "^[4-7]\\s*'\\s*\\d+\\.?\\d*$"
 
@@ -1171,7 +1305,7 @@ index <- str_detect(remaining_problems, pattern)
 
 remaining_problems[!index]
 
-length(remaining_problems[!index])  # 42 entries have problems
+length(remaining_problems[!index])  # 42 entries have problems that were not recognized by our pattern
 
 # We are now ready to put everything we've done so far together and wrangle our reported heights data 
 # as we try to recover as many heights as possible. The code is complex but we will break it down into parts.
@@ -1180,6 +1314,8 @@ pattern <- "^([4-7])\\s*'\\s*(\\d+\\.?\\d*)$"
 
 smallest <- 50
 tallest <- 84
+
+# very complex code
 
 new_heights <- reported_heights %>% 
   mutate(original = height, 
@@ -1200,7 +1336,7 @@ new_heights <- reported_heights %>%
 
 new_heights %>%
   filter(not_inches(original)) %>%
-  select(original, height) %>% 
+  select(original, height) %>%   # to see the differences between original and corrected entries
   arrange(height) %>%
   View()
 
@@ -1210,23 +1346,70 @@ new_heights %>%
   arrange(height) %>% 
   head(n=7)
 
-# String splitting
+# These short heights are very rare and it is likely that the students actually meant 5'1, 5'2, 5'3, 5'4, and 5'5. 
+# But because we are not completely sure, we will leave them as reported.
+
+### Video: String splitting
 
 # read raw murders data line by line
 filename <- system.file("extdata/murders.csv", package = "dslabs")
 lines <- readLines(filename)
+
 lines %>% head()
 
 # split at commas with str_split function, remove row of column names
 x <- str_split(lines, ",") 
-x %>% head()
+
+x %>% 
+  head()
+
+# the first entry is the column name, so we can separate that out
 col_names <- x[[1]]
+col_names
+
+# keep the original table without the first entry, which is now under col_names
 x <- x[-1]
+x
+
+# with map() from the library purrr we can convert our list into a data frame. The map() function applies the same function
+# to each element in a list
 
 # extract first element of each list entry
 library(purrr)
-map(x, function(y) y[1]) %>% head()
-map(x, 1) %>% head()
+
+map(x, function(y) y[1]) %>% 
+  head()
+
+# purrr provides a shortcut, because this is a common task. Here the second argument is not a function by an integer, which map() assumes
+# we want that entry
+
+map(x, 1) %>% 
+  head()
+
+# to force map to return a character vector instead of a list we use map_chr()
+
+map_chr(x, 1) %>%  
+  head()
+
+# to force map to return an integer vector instead of a list we use map_int()
+
+map_int(x, 4) %>%  # 4th column is population
+  head()
+
+
+# so, to create a data frame we can use the following code:
+
+dat <- data.frame(map_chr(x, 1),
+                  map_chr(x, 2),
+                  map_chr(x, 3),
+                  map_chr(x, 4),
+                  map_chr(x, 5)) %>%
+  mutate_all(parse_guess) %>%
+  setNames(col_names)
+
+dat %>%
+  head()
+
 
 # extract columns 1-5 as characters, then convert to proper format - NOTE: DIFFERENT FROM VIDEO
 dat <- data.frame(parse_guess(map_chr(x, 1)),
@@ -1238,7 +1421,7 @@ dat <- data.frame(parse_guess(map_chr(x, 1)),
 
 dat %>% head
 
-# more efficient code for the same thing
+# with purrr a more efficient code for the same thing
 dat <- x %>%
   transpose() %>%
   map( ~ parse_guess(unlist(.))) %>%
@@ -1249,11 +1432,132 @@ dat <- x %>%
 x <- str_split(lines, ",", simplify = TRUE) 
 col_names <- x[1,]
 x <- x[-1,]
-x %>% as_data_frame() %>%
+
+
+x %>% 
+  as_tibble() %>%
   setNames(col_names) %>%
   mutate_all(parse_guess)
 
-# Recoding
+# maybe useful to read json data?
+
+#### Case Study: Extracting a Table from a PDF
+
+# One of the datasets provided in dslabs shows scientific funding rates by gender in the Netherlands:
+
+library(dslabs)
+data("research_funding_rates")
+research_funding_rates 
+
+
+# Downloading the data
+# We start by downloading the PDF document then importing it into R using the following code:
+
+# install.packages("pdftools") - already install
+library("pdftools")
+temp_file <- tempfile()
+url <- "https://www.pnas.org/action/downloadSupplement?doi=10.1073%2Fpnas.1510159112&file=pnas.201510159SI.pdf"
+download.file(url, temp_file)
+txt <- pdf_text(temp_file)
+file.remove(temp_file)
+
+# the code provides in the course does not work
+# so, download the pdf in my project and copy the path so:
+
+txt <- pdf_text("C:/Users/y.hernandes/projects/wrangling/course_data_wrangling/pnas.201510159si.pdf")
+txt
+
+# If we examine the object text we notice that it is a character vector with an entry for each page. 
+# the first page [1] and the second page with the table we want [2]
+# So we keep the page we want using the following code:
+
+raw_data_research_funding_rates <- txt[2]
+
+# Examining this object
+raw_data_research_funding_rates %>%
+  head()
+
+# we see that it is a long string. Each line on the page, including the table rows, is separated by the symbol for newline: \n.
+# \n is the separator. This separator we need for the function str_split()
+
+# We can therefore create a list with the lines of the text as elements:
+
+tab <- str_split(raw_data_research_funding_rates, "\n")
+tab
+
+# Because we start off with just one element in the string, we end up with a list with just one entry:
+
+tab <- tab[[1]]
+
+tab %>% head()
+
+# we see that the information for the column names is the third and fourth entires:
+
+the_names_1 <- tab[3]
+
+the_names_2 <- tab[5]
+
+
+# In the table, the column information is spread across two lines. We want to create one vector with one name for each column. 
+# We can do this using some of the functions we have just learned.
+
+# Extracting the table data
+# Let's start with the first line:
+
+the_names_1
+
+# We want to remove the leading space and everything following the comma. We can use regex for the latter. 
+# Then we can obtain the elements by splitting using the space. We want to split only when there are 2 or more spaces 
+# to avoid splitting success rate. So we use the regex \\s{2,} as follows:
+
+the_names_1 <- the_names_1 %>%
+  str_trim() %>%
+  str_replace_all(",\\s.", "") %>%   # # this removes the , n and %. So  \\s. removes everything after the comma
+  str_split("\\s{2,}", simplify = TRUE) # it removes if more than two whitespaces
+the_names_1
+
+# Now let's look at the second line:
+
+the_names_2
+
+# Here we want to trim the leading space and then split by space as we did for the first line:
+
+the_names_2 <- the_names_2 %>%
+  str_trim() %>%
+  str_split("\\s+", simplify = TRUE)
+the_names_2
+
+# Now we can join these to generate one name for each column:
+
+tmp_names <- str_c(rep(the_names_1, each = 3), the_names_2[-1], sep = "_")  # each = 3 because there are 3 columns "Total" "Men" "Women and the_names_2[-1] because we do not need to match the column "Discipline" to the_names_1
+the_names <- c(the_names_2[1], tmp_names) %>%  
+  str_to_lower() %>%
+  str_replace_all("\\s", "_")
+the_names
+
+# Now we are ready to get the actual data. By examining the tab object, we notice that the information is in lines 6 through 14. 
+# We can use str_split() again to achieve our goal:
+
+new_research_funding_rates <- tab[7:14] %>%
+  str_trim %>%
+  str_split("\\s{2,}", simplify = TRUE) %>%
+  data.frame(stringsAsFactors = FALSE) %>%
+  setNames(the_names) %>%
+  mutate_at(-1, parse_number)
+
+
+new_research_funding_rates %>%
+  head()
+
+# We can see that the objects are identical:
+  
+identical(research_funding_rates, new_research_funding_rates)
+
+
+### Video: Recoding
+
+# Recoding the names of categorical variables, so that we have shorter versions of the names. 
+# We can do it using case_when() or we can use recode() function from the tidyverse
 
 # life expectancy time series for Caribbean countries
 library(dslabs)
@@ -1278,6 +1582,9 @@ gapminder %>% filter(region=="Caribbean") %>%
                           'Trinidad and Tobago' = "Trinidad")) %>%
   ggplot(aes(year, life_expectancy, color = country)) +
   geom_line()
+
+# There are other functions in the tidyverse like recode_factor() or fct_recoder(). These are in the forcats() function in the tidyverse
+
 
 # Assessment Part 1: String Processing Part 3
 
@@ -1329,6 +1636,7 @@ pattern <- "[1-9]*\\.5"
 str_detect(ex, pattern)
 
 # Assessment Part 2: String Processing Part 3
+# You will use a variety of string processing techniques learned in this section to reformat these data.
 
 # Import raw Brexit referendum polling data from Wikipedia:
 
@@ -1341,6 +1649,72 @@ polls <- tab[[6]] %>% html_table(fill = TRUE)
 
 
 ##### IMPORTANT: THIS ASSESSMENT MUST BE DONE (Question 5 to Question 8)
+
+# Question 5
+
+# Some rows in this table do not contain polls. You can identify these by the lack of the percent sign (%) in the Remain column.
+# Update polls by changing the column names to c("dates", "remain", "leave", "undecided", "lead", "samplesize", "pollster", "poll_type", "notes") and only keeping rows that have a percent sign (%) in the remain column.
+# How many rows remain in the polls data frame?
+
+
+# Question 6
+
+# The remain and leave columns are both given in the format "48.1%": percentages out of 100% with a percent symbol.
+# Which of these commands converts the remain vector to a proportion between 0 and 1?
+#  Check all correct answers.
+
+# as.numeric(str_remove(polls$remain, "%"))
+
+# as.numeric(polls$remain)/100
+
+# parse_number(polls$remain)
+
+# str_remove(polls$remain, "%")/100
+
+# as.numeric(str_replace(polls$remain, "%", ""))/100
+
+# parse_number(polls$remain)/100
+
+# Question 7
+
+# The undecided column has some "N/A" values. These "N/A"s are only present when the remain and leave columns total 100%, 
+# so they should actually be zeros.
+# Use a function from stringr to convert "N/A" in the undecided column to 0. The format of your command should be function_name(polls$undecided, "arg1", "arg2").
+# What function replaces function_name?
+
+# What argument replaces arg1?
+# Omit the quotation marks.
+
+# What argument replaces arg2?
+# Omit the quotation marks.
+
+# Question 8
+
+# The dates column contains the range of dates over which the poll was conducted. The format is "8-10 Jan" where the poll had a start date of 2016-01-08 and end date of 2016-01-10. Some polls go across month boundaries (16 May-12 June).
+# The end date of the poll will always be one or two digits, followed by a space, followed by the month as one or more letters (either capital or lowercase). In these data, all month abbreviations or names have 3, 4 or 5 letters.
+# Write a regular expression to extract the end day and month from dates. Insert it into the skeleton code below:
+  
+  
+#  temp <- str_extract_all(polls$dates, _____)
+# end_date <- sapply(temp, function(x) x[length(x)]) # take last element (handles polls that cross month boundaries)
+
+
+# Which of the following regular expressions correctly extracts the end day and month when inserted into the blank in the code above?
+# Check all correct answers.
+
+"\\d?\\s[a-zA-Z]?"
+
+"\\d+\\s[a-zA-Z]+"
+
+"\\d+\\s[A-Z]+"
+
+"[0-9]+\\s[a-zA-Z]+"
+
+"\\d{1,2}\\s[a-zA-Z]+"
+
+"\\d{1,2}[a-zA-Z]+"
+
+"\\d+\\s[a-zA-Z]{3,5}"
 
 # Section 4: Dates, Times, and Text Mining
 
@@ -2039,3 +2413,4 @@ install.packages("pdftools")
 library(pdftools)
 options(digits = 3)
 
+q()
