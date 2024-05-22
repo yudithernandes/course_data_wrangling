@@ -1590,14 +1590,27 @@ gapminder %>% filter(region=="Caribbean") %>%
 
 # Question 1
 
-schedule <- data.frame(day = c("Monday", "Tuesday"), staff = c("Mandy", "Steve", "Chris and Laura", "Ruth and Frank"))
+# You want to turn this into a more useful data frame.
+
+# Which two commands would properly split the text in the “staff” column into each individual name? Select ALL that apply.
+
+schedule <- data.frame(day = c("Monday", "Tuesday"), staff = c("Mandy, Chris and Laura", "Steve, Ruth and Frank"))
+
 schedule
+
+
+str_split(schedule$staff, ",|and")            # comma or and
+str_split(schedule$staff, ", | and ")         # this is ok: comma - space or space - and
+str_split(schedule$staff, ",\\s|\\sand\\s")   # this is ok: comma - space or space - and - space
+str_split(schedule$staff, "\\s?(,|and)\\s?")  # zero or one space - group comma or and - zero or one space
 
 # Question 2
 
+# What code would successfully turn your “Schedule” table into the following tidy table?
+
 tidy <- schedule %>% 
   mutate(staff = str_split(staff, ", | and ")) %>% 
-  unnest()
+  unnest(cols = c(staff))
 
 tidy
 
@@ -1608,7 +1621,7 @@ tidy
 
 tidy <- schedule %>% 
   mutate(staff = str_split(staff, ", | and ", simplify = TRUE)) %>% 
-  unnest()
+  unnest(cols = c(staff))
 
 tidy
 
@@ -1616,6 +1629,9 @@ tidy
 
 # Using the gapminder data, you want to recode countries longer than 12 letters in the region 
 # “Middle Africa” to their abbreviations in a new column, “country_short”. Which code would accomplish this? 
+
+library(dslabs)
+data(gapminder)
 
 dat <- gapminder %>% filter(region == "Middle Africa") %>% 
   mutate(country_short = recode(country, 
@@ -1629,10 +1645,13 @@ list(dat)
 # Which regex expression can be used with str_detect() to return FALSE for every instance of 19.5?
   
 ex <- c(19.5) 
-pattern <- "^1\\d*$"
-pattern <- "^1\\d+\\.\\d?$"
-pattern <- "1\\d*"
-pattern <- "[1-9]*\\.5"
+
+
+pattern <- "^1\\d*$"          # this is the answer: means: begin with 1 - zero or more digits - end
+pattern <- "^1\\d+\\.\\d?$"   # means: begin with 1 - one or more digits - point - zero or one digit - end
+pattern <- "1\\d*"            # means: 1 - zero or more digits
+pattern <- "[1-9]*\\.5"       # means: zero or more digits from 1 to 9 - point 5
+
 str_detect(ex, pattern)
 
 # Assessment Part 2: String Processing Part 3
@@ -1643,9 +1662,16 @@ str_detect(ex, pattern)
 library(rvest)
 library(tidyverse)
 library(stringr)
+
 url <- "https://en.wikipedia.org/w/index.php?title=Opinion_polling_for_the_United_Kingdom_European_Union_membership_referendum&oldid=896735054"
-tab <- read_html(url) %>% html_nodes("table")
-polls <- tab[[6]] %>% html_table(fill = TRUE)
+
+tab <- read_html(url) %>% 
+  html_nodes("table")
+
+polls <- tab[[6]] %>% 
+  html_table(fill = TRUE)
+
+head(polls)
 
 
 ##### IMPORTANT: THIS ASSESSMENT MUST BE DONE (Question 5 to Question 8)
@@ -1654,7 +1680,31 @@ polls <- tab[[6]] %>% html_table(fill = TRUE)
 
 # Some rows in this table do not contain polls. You can identify these by the lack of the percent sign (%) in the Remain column.
 # Update polls by changing the column names to c("dates", "remain", "leave", "undecided", "lead", "samplesize", "pollster", "poll_type", "notes") and only keeping rows that have a percent sign (%) in the remain column.
+
+colnames <- c("dates", "remain", "leave", "undecided", "lead", "samplesize", "pollster", "poll_type", "notes")
+
+# 1 - remove the first row of the table, because this is only the column´s names
+# 2 - change the name of the columns
+# 3 - filter with regex patter for %
+
+pattern <- "%"
+
+polls <- polls[-1,] %>%
+  setNames(colnames) %>%
+  filter(str_detect(remain, pattern))
+ 
+ 
+  
+# QUESTION: why I can not use these lines of code in the polls %>%
+parse_number(polls$remain)/100
+as.numeric(str_replace(polls$remain, "%", ""))/100 
+
+
+head(polls)
+
 # How many rows remain in the polls data frame?
+
+nrow(polls)  # 129
 
 
 # Question 6
@@ -1663,17 +1713,17 @@ polls <- tab[[6]] %>% html_table(fill = TRUE)
 # Which of these commands converts the remain vector to a proportion between 0 and 1?
 #  Check all correct answers.
 
-# as.numeric(str_remove(polls$remain, "%"))
+# as.numeric(str_remove(polls$remain, "%"))  # error
 
 # as.numeric(polls$remain)/100
 
-# parse_number(polls$remain)
+# parse_number(polls$remain)  # error
 
-# str_remove(polls$remain, "%")/100
+# str_remove(polls$remain, "%")/100 # error
 
-# as.numeric(str_replace(polls$remain, "%", ""))/100
+# as.numeric(str_replace(polls$remain, "%", ""))/100  # answer
 
-# parse_number(polls$remain)/100
+# parse_number(polls$remain)/100  # answer
 
 # Question 7
 
@@ -1681,6 +1731,8 @@ polls <- tab[[6]] %>% html_table(fill = TRUE)
 # so they should actually be zeros.
 # Use a function from stringr to convert "N/A" in the undecided column to 0. The format of your command should be function_name(polls$undecided, "arg1", "arg2").
 # What function replaces function_name?
+
+str_replace(polls$undecided, "N/A", "0")
 
 # What argument replaces arg1?
 # Omit the quotation marks.
@@ -1691,10 +1743,17 @@ polls <- tab[[6]] %>% html_table(fill = TRUE)
 # Question 8
 
 # The dates column contains the range of dates over which the poll was conducted. The format is "8-10 Jan" where the poll had a start date of 2016-01-08 and end date of 2016-01-10. Some polls go across month boundaries (16 May-12 June).
-# The end date of the poll will always be one or two digits, followed by a space, followed by the month as one or more letters (either capital or lowercase). In these data, all month abbreviations or names have 3, 4 or 5 letters.
+# The end date of the poll will always be one or two digits, followed by a space, followed by the month as one or more letters (either capital or lowercase). 
+# In these data, all month abbreviations or names have 3, 4 or 5 letters.
 # Write a regular expression to extract the end day and month from dates. Insert it into the skeleton code below:
-  
-  
+
+temp <- str_extract_all(polls$dates, "\\d{1,2}\\s[a-zA-Z]+") 
+
+end_date <- sapply(temp, function(x) x[length(x)]) # # take last element (handles polls that cross month boundaries). For example index [[27] in temp 16 May 12 Jun is now only 12 Jun
+end_date
+
+
+
 #  temp <- str_extract_all(polls$dates, _____)
 # end_date <- sapply(temp, function(x) x[length(x)]) # take last element (handles polls that cross month boundaries)
 
@@ -1704,7 +1763,7 @@ polls <- tab[[6]] %>% html_table(fill = TRUE)
 
 "\\d?\\s[a-zA-Z]?"
 
-"\\d+\\s[a-zA-Z]+"
+"\\d+\\s[a-zA-Z]+" # this
 
 "\\d+\\s[A-Z]+"
 
@@ -1712,9 +1771,9 @@ polls <- tab[[6]] %>% html_table(fill = TRUE)
 
 "\\d{1,2}\\s[a-zA-Z]+"
 
-"\\d{1,2}[a-zA-Z]+"
+"\\d{1,2}[a-zA-Z]+" # this
 
-"\\d+\\s[a-zA-Z]{3,5}"
+"\\d+\\s[a-zA-Z]{3,5} # this
 
 # Section 4: Dates, Times, and Text Mining
 
