@@ -1673,9 +1673,6 @@ polls <- tab[[6]] %>%
 
 head(polls)
 
-
-##### IMPORTANT: THIS ASSESSMENT MUST BE DONE (Question 5 to Question 8)
-
 # Question 5
 
 # Some rows in this table do not contain polls. You can identify these by the lack of the percent sign (%) in the Remain column.
@@ -2610,3 +2607,60 @@ s
 
 s <- str_remove_all(s, "[^\\d\\s]")
 s
+
+
+# Question 12: Use the str_split_fixed function to convert s into a data matrix with just the day and death count data:
+s <- str_split_fixed(s, "\\s+", n = 6 )[,1:5]  # [,1:5] means it only keep the columns 1 to 5, so the rest will be removed. The meaning of n =6, 6 is the maximum number of pieces to return. Default n = Inf uses all possible (infinite) split positions
+s
+
+# Now you are almost ready to finish. Add column names to the matrix: the first column should be day and the next columns should be the header. 
+# Convert all values to numeric. Also, add a column with the month. Call the resulting object tab.
+
+tab <- as.data.frame(s) %>%
+  mutate_all(as.numeric) %>%
+  add_column(month = month, .before = 1) %>%
+  setNames(c("month", "day", header))
+  
+
+tab  # convert to numeric, before adding the column with the month
+
+# What was the mean number of deaths per day in September 2015?
+# What is the mean number of deaths per day in September 2016?
+
+mean(tab$"2015")
+mean(tab$"2016")
+mean(tab$"2017") # over the mean
+mean(tab$"2018")
+
+# Hurricane Maria hit Puerto Rico on September 20, 2017. What was the mean number of deaths per day from September 1-19, 2017, before the hurricane hit?
+
+mean(tab$"2017"[1:19])
+
+# What was the mean number of deaths per day from September 20-30, 2017, after the hurricane hit?
+
+mean(tab$"2017"[20:30])
+
+# Question 13: Finish it up by changing tab to a tidy format, starting from this code outline:
+
+# What code fills the blank to generate a data frame with columns named “day”, “year” and “deaths”?
+
+tab <- tab %>% 
+  pivot_longer(- c("month", "day"), names_to = "year", values_to = "deaths") %>%
+  mutate(deaths = as.numeric(deaths))
+ 
+tab
+
+# Question 14: Make a plot of deaths versus day with color to denote year. Exclude 2018 since we have no data. 
+# Add a vertical line at day 20, the day that Hurricane Maria hit in 2017.
+
+tab %>%
+  filter(year != 2018) %>%
+  ggplot(aes(day, deaths, col = year, label = year)) +
+  geom_line() +
+  geom_vline(xintercept = 20, col = "black") +
+  geom_point()
+  
+#### End of the course ####
+
+
+
